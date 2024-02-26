@@ -16,8 +16,13 @@ services:
     container_name: mongo
     hostname: mongo
     image: mongo:latest
-    command: "--bind_ip_all --keyFile /opt/keyfolder/keyfile --replSet rs0"
-    restart: on-failure
+    command:
+      - --bind_ip_all
+      - --keyFile 
+      - /opt/keyfolder/keyfile
+      - --replSet
+      - rs0
+    restart: always
     environment:
       MONGO_INITDB_DATABASE: files_db
       MONGO_INITDB_ROOT_USERNAME: root
@@ -28,28 +33,30 @@ services:
     volumes:
       - ./db:/data/db
       - ./configdb:/data/configdb
-    healthcheck:
-      test: |
-        test $$(mongosh --quiet -u root -p example --eval "try { rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'mongo:27017' }] }).ok } catch (_) { rs.status().ok }") -eq 1
-      interval: 10s
-      start_period: 120s
+      - ./init:/docker-entrypoint-initdb.d:ro
+      - ./etc/keyfolder/keyfile:/opt/keyfolder/keyfile:ro
     networks:
       guacnetwork_compose:
-
+    
   # clamav.js
   clamavjs:
     container_name: clamavjs
-    build: ./clamav
+    build: ./clamavjs-server
     links:
       - mongo
       - clamav
     environment:
+      DATABASE_URL: "mongodb://mongo:27017/files_db?authSource=admin"
       MONGO_INITDB_ROOT_USERNAME: root
       MONGO_INITDB_ROOT_PASSWORD: example
+      CLAMAV_CONTAINER_NAME: "clamav"
+      CLAMAV_CONTAINER_PORT: "3310"
     networks:
       guacnetwork_compose:
     depends_on:
       mongo:
+        condition: service_started
+      clamav:
         condition: service_healthy
 
   #clamav
